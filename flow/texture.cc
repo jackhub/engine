@@ -1,21 +1,31 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
 #include "flutter/flow/texture.h"
 
-namespace flow {
+namespace flutter {
+
+Texture::Texture(int64_t id) : id_(id) {}
+
+Texture::~Texture() = default;
 
 TextureRegistry::TextureRegistry() = default;
 
-TextureRegistry::~TextureRegistry() = default;
-
 void TextureRegistry::RegisterTexture(std::shared_ptr<Texture> texture) {
+  if (!texture) {
+    return;
+  }
   mapping_[texture->Id()] = texture;
 }
 
 void TextureRegistry::UnregisterTexture(int64_t id) {
-  mapping_.erase(id);
+  auto found = mapping_.find(id);
+  if (found == mapping_.end()) {
+    return;
+  }
+  found->second->OnTextureUnregistered();
+  mapping_.erase(found);
 }
 
 void TextureRegistry::OnGrContextCreated() {
@@ -35,8 +45,4 @@ std::shared_ptr<Texture> TextureRegistry::GetTexture(int64_t id) {
   return it != mapping_.end() ? it->second : nullptr;
 }
 
-Texture::Texture(int64_t id) : id_(id) {}
-
-Texture::~Texture() = default;
-
-}  // namespace flow
+}  // namespace flutter

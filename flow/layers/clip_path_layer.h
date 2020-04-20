@@ -1,4 +1,4 @@
-// Copyright 2015 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -7,18 +7,19 @@
 
 #include "flutter/flow/layers/container_layer.h"
 
-namespace flow {
+namespace flutter {
 
 class ClipPathLayer : public ContainerLayer {
  public:
-  ClipPathLayer();
-  ~ClipPathLayer() override;
-
-  void set_clip_path(const SkPath& clip_path) { clip_path_ = clip_path; }
+  ClipPathLayer(const SkPath& clip_path, Clip clip_behavior = Clip::antiAlias);
 
   void Preroll(PrerollContext* context, const SkMatrix& matrix) override;
 
   void Paint(PaintContext& context) const override;
+
+  bool UsesSaveLayer() const {
+    return clip_behavior_ == Clip::antiAliasWithSaveLayer;
+  }
 
 #if defined(OS_FUCHSIA)
   void UpdateScene(SceneUpdateContext& context) override;
@@ -26,10 +27,12 @@ class ClipPathLayer : public ContainerLayer {
 
  private:
   SkPath clip_path_;
+  Clip clip_behavior_;
+  bool children_inside_clip_ = false;
 
-  FXL_DISALLOW_COPY_AND_ASSIGN(ClipPathLayer);
+  FML_DISALLOW_COPY_AND_ASSIGN(ClipPathLayer);
 };
 
-}  // namespace flow
+}  // namespace flutter
 
 #endif  // FLUTTER_FLOW_LAYERS_CLIP_PATH_LAYER_H_

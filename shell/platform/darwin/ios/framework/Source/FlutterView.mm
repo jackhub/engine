@@ -1,4 +1,4 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -8,73 +8,72 @@
 #include "flutter/common/task_runners.h"
 #include "flutter/flow/layers/layer_tree.h"
 #include "flutter/fml/platform/darwin/cf_utils.h"
+#include "flutter/fml/synchronization/waitable_event.h"
 #include "flutter/fml/trace_event.h"
 #include "flutter/shell/common/platform_view.h"
 #include "flutter/shell/common/rasterizer.h"
-#include "flutter/shell/common/shell.h"
 #include "flutter/shell/platform/darwin/ios/framework/Source/FlutterViewController_Internal.h"
 #include "flutter/shell/platform/darwin/ios/ios_surface_gl.h"
 #include "flutter/shell/platform/darwin/ios/ios_surface_software.h"
-#include "lib/fxl/synchronization/waitable_event.h"
 #include "third_party/skia/include/utils/mac/SkCGUtils.h"
 
-@interface FlutterView () <UIInputViewAudioFeedback>
+@implementation FlutterView {
+  id<FlutterViewEngineDelegate> _delegate;
+}
 
-@end
+- (instancetype)init {
+  @throw([NSException exceptionWithName:@"FlutterView must initWithDelegate"
+                                 reason:nil
+                               userInfo:nil]);
+}
 
-@implementation FlutterView
+- (instancetype)initWithFrame:(CGRect)frame {
+  @throw([NSException exceptionWithName:@"FlutterView must initWithDelegate"
+                                 reason:nil
+                               userInfo:nil]);
+}
 
-- (FlutterViewController*)flutterViewController {
-  // Find the first view controller in the responder chain and see if it is a FlutterViewController.
-  for (UIResponder* responder = self.nextResponder; responder != nil;
-       responder = responder.nextResponder) {
-    if ([responder isKindOfClass:[UIViewController class]]) {
-      if ([responder isKindOfClass:[FlutterViewController class]]) {
-        return reinterpret_cast<FlutterViewController*>(responder);
-      } else {
-        // Should only happen if a non-FlutterViewController tries to somehow (via dynamic class
-        // resolution or reparenting) set a FlutterView as its view.
-        return nil;
-      }
-    }
+- (instancetype)initWithCoder:(NSCoder*)aDecoder {
+  @throw([NSException exceptionWithName:@"FlutterView must initWithDelegate"
+                                 reason:nil
+                               userInfo:nil]);
+}
+
+- (instancetype)initWithDelegate:(id<FlutterViewEngineDelegate>)delegate opaque:(BOOL)opaque {
+  FML_DCHECK(delegate) << "Delegate must not be nil.";
+  self = [super initWithFrame:CGRectNull];
+
+  if (self) {
+    _delegate = delegate;
+    self.layer.opaque = opaque;
   }
-  return nil;
+
+  return self;
 }
 
 - (void)layoutSubviews {
-  if ([self.layer isKindOfClass:[CAEAGLLayer class]]) {
-    CAEAGLLayer* layer = reinterpret_cast<CAEAGLLayer*>(self.layer);
-    layer.allowsGroupOpacity = YES;
-    layer.opaque = YES;
+  if ([self.layer isKindOfClass:NSClassFromString(@"CAEAGLLayer")] ||
+      [self.layer isKindOfClass:NSClassFromString(@"CAMetalLayer")]) {
     CGFloat screenScale = [UIScreen mainScreen].scale;
-    layer.contentsScale = screenScale;
-    layer.rasterizationScale = screenScale;
+    self.layer.allowsGroupOpacity = YES;
+    self.layer.contentsScale = screenScale;
+    self.layer.rasterizationScale = screenScale;
   }
 
   [super layoutSubviews];
 }
 
 + (Class)layerClass {
-#if TARGET_IPHONE_SIMULATOR
-  return [CALayer class];
-#else   // TARGET_IPHONE_SIMULATOR
-  return [CAEAGLLayer class];
-#endif  // TARGET_IPHONE_SIMULATOR
+  return flutter::GetCoreAnimationLayerClassForRenderingAPI();
 }
 
-- (std::unique_ptr<shell::IOSSurface>)createSurface {
-  if ([self.layer isKindOfClass:[CAEAGLLayer class]]) {
-    fml::scoped_nsobject<CAEAGLLayer> eagl_layer(
-        reinterpret_cast<CAEAGLLayer*>([self.layer retain]));
-    return std::make_unique<shell::IOSSurfaceGL>(std::move(eagl_layer));
-  } else {
-    fml::scoped_nsobject<CALayer> layer(reinterpret_cast<CALayer*>([self.layer retain]));
-    return std::make_unique<shell::IOSSurfaceSoftware>(std::move(layer));
-  }
-}
-
-- (BOOL)enableInputClicksWhenVisible {
-  return YES;
+- (std::unique_ptr<flutter::IOSSurface>)createSurface:
+    (std::shared_ptr<flutter::IOSContext>)ios_context {
+  return flutter::IOSSurface::Create(
+      std::move(ios_context),                              // context
+      fml::scoped_nsobject<CALayer>{[self.layer retain]},  // layer
+      [_delegate platformViewsController]                  // platform views controller
+  );
 }
 
 - (void)drawLayer:(CALayer*)layer inContext:(CGContextRef)context {
@@ -84,16 +83,8 @@
     return;
   }
 
-  FlutterViewController* controller = [self flutterViewController];
-
-  if (controller == nil) {
-    return;
-  }
-
-  auto& shell = [controller shell];
-
-  auto screenshot = shell.Screenshot(shell::Rasterizer::ScreenshotType::UncompressedImage,
-                                     false /* base64 encode */);
+  auto screenshot = [_delegate takeScreenshot:flutter::Rasterizer::ScreenshotType::UncompressedImage
+                              asBase64Encoded:NO];
 
   if (!screenshot.data || screenshot.data->isEmpty() || screenshot.frame_size.isEmpty()) {
     return;

@@ -1,4 +1,4 @@
-// Copyright 2016 The Fuchsia Authors. All rights reserved.
+// Copyright 2013 The Flutter Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -82,6 +82,18 @@ class WeakPtr {
   T* get() const {
     FML_DCHECK_CREATION_THREAD_IS_CURRENT(checker_.checker);
     return *this ? ptr_ : nullptr;
+  }
+
+  // TODO(gw280): Remove all remaining usages of getUnsafe().
+  // No new usages of getUnsafe() are allowed.
+  //
+  // https://github.com/flutter/flutter/issues/42949
+  T* getUnsafe() const {
+    // This is an unsafe method to get access to the raw pointer.
+    // We still check the flag_ to determine if the pointer is valid
+    // but callees should note that this WeakPtr could have been
+    // invalidated on another thread.
+    return flag_ && flag_->is_valid() ? ptr_ : nullptr;
   }
 
   T& operator*() const {
